@@ -191,6 +191,81 @@ table.mx{border-collapse:collapse;width:100%;font-size:11px;min-width:520px}
 .modal .fld{margin-bottom:13px}
 .modal input,.modal select{width:100%}
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--green-badge);color:var(--green-ink);padding:11px 20px;border-radius:999px;font-size:12px;font-weight:700;z-index:99;transition:transform .3s;box-shadow:var(--shadow);max-width:90vw;text-align:center}
+.bulk-preview{
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+  margin-bottom:12px;
+}
+
+.bulk-preview-head{
+  background:var(--card2);
+  padding:10px 12px;
+  font-size:10px;
+  letter-spacing:1px;
+  font-weight:800;
+  color:var(--muted);
+  border-bottom:1px solid var(--line);
+}
+
+.bulk-preview-row{
+  display:grid;
+  grid-template-columns:1fr 120px 90px;
+  gap:10px;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  font-size:11.5px;
+  align-items:center;
+}
+
+.bulk-preview-row:last-child{
+  border-bottom:none;
+}
+
+.bulk-preview-row .name{
+  font-weight:700;
+}
+
+.bulk-preview-row .belt{
+  font-size:10px;
+}
+
+.bulk-preview-row .year{
+  font-family:var(--mono);
+  color:var(--muted);
+  text-align:right;
+}
+
+.bulk-error{
+  background:var(--red-soft);
+  color:var(--red-ink);
+  border-radius:10px;
+  padding:10px 12px;
+  font-size:11px;
+  margin-bottom:10px;
+  line-height:1.6;
+}
+
+.bulk-success{
+  background:var(--gold-soft);
+  color:var(--gold2);
+  border-radius:10px;
+  padding:10px 12px;
+  font-size:11px;
+  margin-bottom:10px;
+  line-height:1.6;
+}
+
+@media(max-width:560px){
+  .bulk-preview-row{
+    grid-template-columns:1fr;
+    gap:4px;
+  }
+
+  .bulk-preview-row .year{
+    text-align:left;
+  }
+}
 #toast.show{transform:translateX(-50%) translateY(0)}
 #toast.err{background:var(--red-soft);color:var(--red-ink)}
 footer{border-top:1px solid var(--line);padding:26px 14px;text-align:center;font-family:var(--serif);font-variant-caps:small-caps;letter-spacing:3px;font-size:12px;color:var(--muted);position:relative;z-index:1}
@@ -273,9 +348,13 @@ footer{border-top:1px solid var(--line);padding:26px 14px;text-align:center;font
 <!-- ================= MEMBERS ================= -->
 <section id="sec-members" hidden>
   <div class="mem-head">
-    <div><h2>Members Dojo</h2><p id="memCount">—</p></div>
+  <div><h2>Members Dojo</h2><p id="memCount">—</p></div>
+
+  <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap">
+    <button class="btn btn-soft btn-sm" id="btnAddMemList">+ Add Members List</button>
     <button class="btn btn-gold btn-sm" id="btnAddMem">+ Add Member</button>
   </div>
+</div>
   <div class="mgrid" id="memGrid"></div>
 </section>
 
@@ -366,6 +445,53 @@ footer{border-top:1px solid var(--line);padding:26px 14px;text-align:center;font
     <div class="fld"><div class="lbl">JOIN DATE</div><input type="date" id="mmDate"></div>
     <div class="fld"><div class="lbl">BELT LEVEL</div><select id="mmBelt"></select></div>
     <div class="row2"><button class="btn btn-ghost" id="mmCancel">Cancel</button><button class="btn btn-gold" id="mmSave">Save Changes</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="modalBulkMembers" hidden>
+  <div class="modal" style="max-width:700px;max-height:90vh;overflow-y:auto">
+
+    <h3>Add Members List</h3>
+
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+      Add multiple CMA members at once. Enter one member per line using this format:
+    </p>
+
+    <div class="note" style="margin-top:0;margin-bottom:14px">
+      <b>Format:</b> Full Name | Belt Level | Year Joined
+      <br><br>
+      <span class="mono">
+        John Doe | White | 2024<br>
+        Jane Smith | Yellow | 2023<br>
+        Michael Brown | Green | 2022
+      </span>
+    </div>
+
+    <div class="fld">
+      <div class="lbl">MEMBERS LIST</div>
+      <textarea
+        id="bulkMembersInput"
+        placeholder="John Doe | White | 2024&#10;Jane Smith | Yellow | 2023&#10;Michael Brown | Green | 2022"
+        style="width:100%;min-height:260px;resize:vertical;font-family:var(--mono);font-size:12px;line-height:1.7"
+      ></textarea>
+    </div>
+
+    <div id="bulkPreview" hidden style="margin-top:14px"></div>
+
+    <div class="row2">
+      <button class="btn btn-ghost" id="bulkCancel">Cancel</button>
+      <button class="btn btn-soft" id="bulkPreviewBtn">Preview Members</button>
+    </div>
+
+    <button
+      class="btn btn-gold"
+      id="bulkSaveBtn"
+      style="margin-top:10px"
+      hidden
+    >
+      + Add Members to CMA
+    </button>
+
   </div>
 </div>
 
@@ -676,6 +802,645 @@ function openMember(id){
   $('#modalMember').hidden=false;
 }
 $('#btnAddMem').onclick=()=>openMember(null);
+/* ---------- BULK MEMBER IMPORT ---------- */
+
+let bulkParsedMembers = [];
+
+function openBulkMembers(){
+  bulkParsedMembers = [];
+
+  $('#bulkMembersInput').value = '';
+  $('#bulkPreview').innerHTML = '';
+  $('#bulkPreview').hidden = true;
+  $('#bulkSaveBtn').hidden = true;
+
+  $('#modalBulkMembers').hidden = false;
+
+  setTimeout(() => $('#bulkMembersInput').focus(), 100);
+}
+
+$('#btnAddMemList').onclick = openBulkMembers;
+
+$('#bulkCancel').onclick = () => {
+  $('#modalBulkMembers').hidden = true;
+  bulkParsedMembers = [];
+};
+
+function parseBulkMembers(){
+
+  const raw = $('#bulkMembersInput').value.trim();
+
+  if(!raw){
+    return {
+      members: [],
+      errors: ['Please enter at least one member name.']
+    };
+  }
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const parsed = [];
+  const errors = [];
+
+  lines.forEach((line, index) => {
+
+    const lineNumber = index + 1;
+
+    /*
+      The importer now accepts:
+
+      1. Name
+      2. Name | Belt
+      3. Name | Year
+      4. Name | Belt | Year
+
+      Examples:
+
+      John Doe
+      John Doe | White Belt
+      John Doe | 2024
+      John Doe | White Belt | 2024
+    */
+
+    const parts = line
+      .split('|')
+      .map(x => x.trim())
+      .filter(Boolean);
+
+    if(!parts.length){
+      return;
+    }
+
+    const name = parts[0];
+
+    if(!name){
+      errors.push(`Line ${lineNumber}: Name is missing.`);
+      return;
+    }
+
+
+    /*
+      Determine belt and join date.
+
+      Missing information is allowed.
+    */
+
+    let belt = null;
+    let joinDate = '';
+
+
+    /*
+      NAME ONLY
+
+      Example:
+      John Doe
+
+      Belt and date will be completed later.
+    */
+
+    if(parts.length === 1){
+
+      belt = null;
+      joinDate = '';
+
+    }
+
+
+    /*
+      NAME + ONE VALUE
+
+      The second value can be either:
+
+      White Belt
+      Green
+      3rd Dan
+
+      OR:
+
+      2024
+    */
+
+    else if(parts.length === 2){
+
+      const value = parts[1];
+
+      if(/^\d{4}$/.test(value)){
+
+        joinDate = `${value}-01-01`;
+        belt = null;
+
+      }else{
+
+        belt = normalizeBulkBelt(value);
+
+        if(!belt){
+          errors.push(
+            `Line ${lineNumber}: "${value}" was not recognised as a belt.`
+          );
+          return;
+        }
+
+      }
+
+    }
+
+
+    /*
+      NAME + BELT + YEAR
+    */
+
+    else {
+
+      const beltInput = parts[1];
+      const yearInput = parts[2];
+
+      belt = normalizeBulkBelt(beltInput);
+
+      if(!belt){
+        errors.push(
+          `Line ${lineNumber}: "${beltInput}" was not recognised as a belt.`
+        );
+        return;
+      }
+
+      if(/^\d{4}$/.test(yearInput)){
+
+        joinDate = `${yearInput}-01-01`;
+
+      }else if(/^\d{4}-\d{2}-\d{2}$/.test(yearInput)){
+
+        joinDate = yearInput;
+
+      }else{
+
+        errors.push(
+          `Line ${lineNumber}: "${yearInput}" is not a valid year/date.`
+        );
+        return;
+      }
+
+    }
+
+
+    /*
+      Check for duplicate names inside the
+      current pasted list.
+    */
+
+    const duplicateInPaste = parsed.some(
+      m => m.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if(duplicateInPaste){
+
+      errors.push(
+        `Line ${lineNumber}: "${name}" appears more than once in this list.`
+      );
+
+      return;
+    }
+
+
+    /*
+      Check existing CMA members.
+    */
+
+    const alreadyExists = members.some(
+      m => m.name.trim().toLowerCase() === name.toLowerCase()
+    );
+
+    if(alreadyExists){
+
+      errors.push(
+        `Line ${lineNumber}: "${name}" already exists in CMA members.`
+      );
+
+      return;
+    }
+
+
+    /*
+      IMPORTANT:
+
+      Missing belt/date are allowed.
+
+      We store them as temporary values because
+      the existing member system expects these
+      fields to exist.
+
+      The instructor can later edit the member
+      normally.
+    */
+
+    parsed.push({
+
+      name,
+
+      joinDate: joinDate || today(),
+
+      belt: belt ? belt.key : 'white',
+
+      /*
+        These flags let the preview tell the instructor
+        that the information still needs to be updated.
+      */
+
+      beltMissing: !belt,
+
+      joinDateMissing: !joinDate
+
+    });
+
+  });
+
+
+  return {
+    members: parsed,
+    errors
+  };
+}
+
+/*
+  Converts common instructor input such as:
+
+  White
+  White Belt
+  9th Kyu
+
+  into your existing belt keys.
+*/
+
+function normalizeBulkBelt(value){
+
+  const k = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g,' ');
+
+  if(!k) return null;
+
+  /*
+    Exact existing key.
+  */
+
+  let hit = BELTS.find(
+    b => b.key.toLowerCase() === k
+  );
+
+  if(hit) return hit;
+
+
+  /*
+    White
+  */
+
+  if(k.includes('white') || k.includes('9th kyu'))
+    return BELTS.find(b => b.key === 'white');
+
+
+  /*
+    Yellow
+  */
+
+  if(k.includes('yellow') || k.includes('8th kyu'))
+    return BELTS.find(b => b.key === 'yellow');
+
+
+  /*
+    Orange
+  */
+
+  if(k.includes('orange') || k.includes('7th kyu'))
+    return BELTS.find(b => b.key === 'orange');
+
+
+  /*
+    Green
+  */
+
+  if(k.includes('green') || k.includes('6th kyu'))
+    return BELTS.find(b => b.key === 'green');
+
+
+  /*
+    Purple
+  */
+
+  if(k.includes('purple') || k.includes('5th kyu'))
+    return BELTS.find(b => b.key === 'purple');
+
+
+  /*
+    Blue
+  */
+
+  if(k.includes('blue') || k.includes('4th kyu'))
+    return BELTS.find(b => b.key === 'blue');
+
+
+  /*
+    Brown belts
+  */
+
+  if(k.includes('brown')){
+
+    const match = k.match(/([1-3])/);
+
+    if(match){
+
+      return BELTS.find(
+        b => b.key === 'brown'+match[1]
+      );
+    }
+
+    if(k.includes('3rd brown') || k.includes('1st kyu'))
+      return BELTS.find(b => b.key === 'brown3');
+
+    if(k.includes('2nd brown') || k.includes('2nd kyu'))
+      return BELTS.find(b => b.key === 'brown2');
+
+    if(k.includes('1st brown') || k.includes('3rd kyu'))
+      return BELTS.find(b => b.key === 'brown1');
+  }
+
+
+  /*
+    Black belts / Dan ranks.
+
+    Examples:
+      Black
+      Black Belt
+      1st Dan
+      3rd Dan
+      Black 3
+      3rd Black
+  */
+
+  if(
+    k.includes('black') ||
+    k.includes('dan') ||
+    /^\d+(st|nd|rd|th)?\s*dan/.test(k)
+  ){
+
+    let dan = null;
+
+    const blackMatch = k.match(/black\s*(\d+)/);
+    const danMatch = k.match(/(\d+)(?:st|nd|rd|th)?\s*dan/);
+
+    if(blackMatch)
+      dan = Number(blackMatch[1]);
+
+    if(danMatch)
+      dan = Number(danMatch[1]);
+
+    if(!dan)
+      dan = 1;
+
+    dan = Math.min(10, Math.max(1, dan));
+
+    return BELTS.find(
+      b => b.key === 'black'+dan
+    );
+  }
+
+  return null;
+}
+
+
+/*
+  Show preview before inserting anything.
+*/
+
+$('#bulkPreviewBtn').onclick = () => {
+
+  const result = parseBulkMembers();
+
+  const preview = $('#bulkPreview');
+
+  bulkParsedMembers = result.members;
+
+  if(result.errors.length){
+
+    preview.innerHTML = `
+      <div class="bulk-error">
+        <b>Please correct the following:</b>
+        <br><br>
+        ${result.errors.map(esc).join('<br>')}
+      </div>
+    `;
+
+    preview.hidden = false;
+    $('#bulkSaveBtn').hidden = true;
+
+    return;
+  }
+
+
+  if(!result.members.length){
+
+    preview.innerHTML = `
+      <div class="bulk-error">
+        No valid members found.
+      </div>
+    `;
+
+    preview.hidden = false;
+    $('#bulkSaveBtn').hidden = true;
+
+    return;
+  }
+
+
+  /*
+    Preview member IDs that will be generated.
+
+    We calculate them sequentially without changing
+    the actual database yet.
+  */
+
+  let nextNumber = getNextMemberNumber();
+
+  const rows = result.members.map((m, index) => {
+
+  const id = 'm' + (nextNumber + index);
+  const belt = normalizeBelt(m.belt);
+
+  const beltDisplay = m.beltMissing
+    ? `<span style="color:var(--red-ink);font-weight:700">Not specified</span>`
+    : `
+      <span class="belt">
+        <i style="--c:${belt.color}"></i>
+        ${esc(shortBelt(belt))}
+      </span>
+    `;
+
+  const yearDisplay = m.joinDateMissing
+    ? `<span style="color:var(--red-ink);font-weight:700">Not specified</span>`
+    : esc(m.joinDate.slice(0,4));
+
+  return `
+    <div class="bulk-preview-row">
+
+      <div class="name">
+        ${esc(m.name)}
+      </div>
+
+      <div class="belt">
+        ${beltDisplay}
+      </div>
+
+      <div class="year">
+        ${yearDisplay}
+        • ${esc(id)}
+      </div>
+
+    </div>
+  `;
+
+}).join('');
+
+
+  preview.innerHTML = `
+    <div class="bulk-success">
+  <b>${result.members.length} members ready to be added.</b>
+  <br>
+  Members can be added with names only. Belt and join date can be updated later from Edit Member.
+</div>
+    <div class="bulk-preview">
+
+      <div class="bulk-preview-head">
+        MEMBER • BELT • YEAR / MEMBER ID
+      </div>
+
+      ${rows}
+
+    </div>
+  `;
+
+  preview.hidden = false;
+  $('#bulkSaveBtn').hidden = false;
+};
+
+
+/*
+  Get the next numeric member number.
+
+  This deliberately uses the same "m001 / m002..."
+  structure already used by nextMemberId().
+*/
+
+function getNextMemberNumber(){
+
+  let highest = 0;
+
+  members.forEach(m => {
+
+    const match = String(m.id || '')
+      .match(/^m(\d+)$/i);
+
+    if(match){
+
+      const n = Number(match[1]);
+
+      if(n > highest)
+        highest = n;
+    }
+  });
+
+  return highest + 1;
+}
+
+
+/*
+  Actually create the members.
+
+  IMPORTANT:
+  Each member is inserted into the SAME
+  "members" array used by Add Member.
+*/
+
+$('#bulkSaveBtn').onclick = () => {
+
+  if(!bulkParsedMembers.length){
+    toast('No members ready to add','error');
+    return;
+  }
+
+  const count = bulkParsedMembers.length;
+
+  confirmBox(
+    'Add Members',
+    `Add ${count} member${count === 1 ? '' : 's'} to the CMA membership database?`,
+    () => {
+
+      let nextNumber = getNextMemberNumber();
+
+      const newMembers = bulkParsedMembers.map((m,index) => ({
+
+        id: 'm' + (nextNumber + index),
+
+        name: m.name,
+
+        joinDate: m.joinDate,
+
+        belt: m.belt
+
+      }));
+
+
+      /*
+        Add them to the SAME members array.
+      */
+
+      members.push(...newMembers);
+
+
+      /*
+        Use the existing persistence system.
+      */
+
+      persist();
+
+
+      /*
+        Refresh the existing CMA interface.
+      */
+
+      renderMembers();
+      renderAttendance();
+      fillRepDates();
+      renderReports();
+
+
+      /*
+        Close modal.
+      */
+
+      $('#modalBulkMembers').hidden = true;
+
+      bulkParsedMembers = [];
+
+
+      /*
+        Clear input for next use.
+      */
+
+      $('#bulkMembersInput').value = '';
+      $('#bulkPreview').innerHTML = '';
+      $('#bulkPreview').hidden = true;
+      $('#bulkSaveBtn').hidden = true;
+
+
+      toast(
+        `🥋 ${count} member${count === 1 ? '' : 's'} added to CMA`
+      );
+
+    }
+  );
+};
 $('#mmCancel').onclick=()=>$('#modalMember').hidden=true;
 $('#mmSave').onclick=()=>{
   const name=$('#mmName').value.trim(); if(!name){ toast('⚠ Name required','error'); return; }
